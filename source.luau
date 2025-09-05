@@ -2,10 +2,10 @@ local Libary = loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao14
 workspace.FallenPartsDestroyHeight = -math.huge
 
 local Window = Libary:MakeWindow({
-    Title = "BOLA Hub 2.0 | Brookhaven RP ",
-    SubTitle = "by: C00lkidd quebra TUDO",
-    LoadText = "Carregando BOLA Hub",
-    Flags = "BOLAHub_Broookhaven"
+    Title = "🌠 VictoryLap Hub 🌠 - Brookhaven Updated",
+    SubTitle = "by: Vs888 and Wx",
+    LoadText = "Carregando VictoryLap Hub",
+    Flags = "VcLpHub_Broookhaven"
 })
 Window:AddMinimizeButton({
     Button = { Image = "rbxassetid://0", BackgroundTransparency = 0 },
@@ -15,8 +15,8 @@ Window:AddMinimizeButton({
 local InfoTab = Window:MakeTab({ Title = "Info", Icon = "rbxassetid://15309138473" })
 
 InfoTab:AddSection({ "Informações do Script" })
-InfoTab:AddParagraph({ "Você está usando:", "BOLA Hub Brookhaven " })
-InfoTab:AddParagraph({"Your executor:", executor})
+InfoTab:AddParagraph({ "VictoryLap Game: Brookhaven" })
+InfoTab:AddParagraph({"Your executor:" .. identifyexecutor()})
 
 InfoTab:AddSection({ "Rejoin" })
 InfoTab:AddButton({
