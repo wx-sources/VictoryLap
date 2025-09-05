@@ -201,7 +201,172 @@ TrollTab:AddToggle({
             resetSitting()
         end
     end
+
+
 })
+
+local Tab2 = Window:MakeTab({"Fun", "fun"})
+
+local Section = Tab2:AddSection({"Player Character"})
+
+
+local Players = game:GetService("Players")
+local localPlayer = Players.LocalPlayer
+
+local selectedPlayerName = nil
+local headsitActive = false
+
+local function headsitOnPlayer(targetPlayer)
+    local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+    if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("Head") then
+        warn("Jogador alvo sem cabeça ou personagem.")
+        return false
+    end
+    local targetHead = targetPlayer.Character.Head
+    local localRoot = character:FindFirstChild("HumanoidRootPart")
+    if not localRoot then
+        warn("Seu personagem não tem HumanoidRootPart.")
+        return false
+    end
+
+    localRoot.CFrame = targetHead.CFrame * CFrame.new(0, 2.2, 0)
+
+    for _, v in pairs(localRoot:GetChildren()) do
+        if v:IsA("WeldConstraint") then
+            v:Destroy()
+        end
+    end
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = localRoot
+    weld.Part1 = targetHead
+    weld.Parent = localRoot
+
+    if humanoid then
+        humanoid.Sit = true
+    end
+
+    print("Headsit ativado em " .. targetPlayer.Name)
+    return true
+end
+
+local function removeHeadsit()
+    local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local localRoot = character:FindFirstChild("HumanoidRootPart")
+    if localRoot then
+        for _, v in pairs(localRoot:GetChildren()) do
+            if v:IsA("WeldConstraint") then
+                v:Destroy()
+            end
+        end
+    end
+    if humanoid then
+        humanoid.Sit = false
+    end
+
+    print("Headsit desativado.")
+end
+
+-- Função para encontrar jogador por nome parcial
+local function findPlayerByPartialName(partial)
+    partial = partial:lower()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Name:lower():sub(1, #partial) == partial then
+            return player
+        end
+    end
+    return nil
+end
+
+-- Notificação com imagem do jogador
+local function notifyPlayerSelected(player)
+    local StarterGui = game:GetService("StarterGui")
+    local thumbType = Enum.ThumbnailType.HeadShot
+    local thumbSize = Enum.ThumbnailSize.Size100x100
+    local content, _ = Players:GetUserThumbnailAsync(player.UserId, thumbType, thumbSize)
+
+    StarterGui:SetCore("SendNotification", {
+        Title = "Player Selecionado",
+        Text = player.Name .. " foi selecionado!",
+        Icon = content,
+        Duration = 5
+    })
+end
+
+-- TextBox para digitar nome do player
+Tab2:AddTextBox({
+    Name = "Nome do Jogador",
+    Description = "Digite parte do nome",
+    PlaceholderText = "ex: lo → Lolyta",
+    Callback = function(Value)
+        local foundPlayer = findPlayerByPartialName(Value)
+        if foundPlayer then
+            selectedPlayerName = foundPlayer.Name
+            notifyPlayerSelected(foundPlayer)
+        else
+            warn("Nenhum jogador encontrado com esse nome.")
+        end
+    end
+})
+
+-- Botão para ativar/desativar headsit
+-- Botão para ativar/desativar headsit (versão simplificada)
+Tab2:AddButton({"", function()
+    if not selectedPlayerName then
+    
+        return
+    end
+
+    if not headsitActive then
+        local target = Players:FindFirstChild(selectedPlayerName)
+        if target and headsitOnPlayer(target) then
+            headsitActive = true
+        end
+    else
+        removeHeadsit()
+        headsitActive = false
+    end
+end})
+
+
+
+
+Tab2:AddSlider({
+    Name = "Speed Player",
+    Increase = 1,
+    MinValue = 16,
+    MaxValue = 888,
+    Default = 16,
+    Callback = function(Value)
+        local player = game.Players.LocalPlayer
+        local character = player.Character or player.CharacterAdded:Wait()
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        
+        if humanoid then
+            humanoid.WalkSpeed = Value
+        end
+    end
+ })
+ 
+ Tab2:AddSlider({
+    Name = "Jumppower",
+    Increase = 1,
+    MinValue = 50,
+    MaxValue = 500,
+    Default = 50,
+    Callback = function(Value)
+        local player = game.Players.LocalPlayer
+        local character = player.Character or player.CharacterAdded:Wait()
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        
+        if humanoid then
+            humanoid.JumpPower = Value
+        end
+    end
+ })
 
 local Troll = Window:MakeTab({ Title = "Troll Players", Icon = "rbxassetid://131153193945220" })
 
@@ -2740,952 +2905,447 @@ Tab:AddParagraph({
     "O efeito de lag começa após 35 segundos"
 })
 
-local Tab = Window:MakeTab({"Nomes", "Paper"})
+local Tab6 = Window:MakeTab({"Rgb Name", "brush"})
+local Section = Tab6:AddSection({""})
 
-local isNameActive = false
-local isBioActive = false
 
-local SectionRGBName = Tab:AddSection({
-    Name = "Nome RGB"
+
+
+-- Velocidade controlada pelo slider (quanto maior, mais rápido)
+local rgbSpeed = 1
+
+Tab6:AddSlider({
+    Name = "Velocidade RGB",
+    Description = "Aumenta a velocidade do efeito RGB",
+    Min = 1,
+    Max = 5,
+    Increase = 1,
+    Default = 3,
+    Callback = function(Value)
+        rgbSpeed = Value
+    end
 })
 
-Tab:AddToggle({
-    Name = "Nome RGB",
-    Description = "Ativar Nome RGB",
+-- Função para criar cor RGB suave com HSV
+local function getRainbowColor(speedMultiplier)
+    local h = (tick() * speedMultiplier % 5) / 5 -- gira o hue suavemente de 0 a 1
+    return Color3.fromHSV(h, 1, 1)
+end
+
+-- Função para disparar eventos
+local function fireServer(eventName, args)
+    local event = game:GetService("ReplicatedStorage"):FindFirstChild("RE")
+    if event and event:FindFirstChild(eventName) then
+        pcall(function()
+            event[eventName]:FireServer(unpack(args))
+        end)
+    end
+end
+
+local Section = Tab6:AddSection({"RGB para usar em você"})
+
+-- Nome + Bio RGB  juntos
+local nameBioRGBActive = false
+Tab6:AddToggle({
+    Name = "Nome + Bio RGB ",
     Default = false,
-    Callback = function(value)
-        isNameActive = value
-        print(value and "RGB Name ativado" or "RGB Name desativado")
-    end
-})
-
-local SectionRGBBio = Tab:AddSection({
-    Name = "RGB BIO"
-})
-
-Tab:AddToggle({
-    Name = "RGB BIO",
-    Description = "Ativar RGB BIO",
-    Default = false,
-    Callback = function(value)
-        isBioActive = value
-        print(value and "RGB BIO ativado" or "RGB BIO desativado")
-    end
-})
-
-local vibrantColors = {
-    Color3.fromRGB(255, 0, 0),   -- Vermelho
-    Color3.fromRGB(0, 255, 0),   -- Verde
-    Color3.fromRGB(0, 0, 255),   -- Azul
-    Color3.fromRGB(255, 255, 0), -- Amarelo
-    Color3.fromRGB(255, 0, 255), -- Magenta
-    Color3.fromRGB(0, 255, 255), -- Ciano
-    Color3.fromRGB(255, 165, 0), -- Laranja
-    Color3.fromRGB(128, 0, 128), -- Roxo
-    Color3.fromRGB(255, 20, 147) -- Rosa choque
-}
-
-spawn(function()
-    while true do
-        if isNameActive then
-            local randomColor = vibrantColors[math.random(#vibrantColors)]
-            local args = {
-                [1] = "PickingRPNameColor",
-                [2] = randomColor
-            }
-            game:GetService("ReplicatedStorage").RE:FindFirstChild("1RPNam1eColo1r"):FireServer(unpack(args))
-        end
-        wait(0.7)
-    end
-end)
-
-spawn(function()
-    while true do
-        if isBioActive then
-            local randomColor = vibrantColors[math.random(#vibrantColors)]
-            local args = {
-                [1] = "PickingRPBioColor",
-                [2] = randomColor
-            }
-            game:GetService("ReplicatedStorage").RE:FindFirstChild("1RPNam1eColo1r"):FireServer(unpack(args))
-        end
-        wait(0.7)
-    end
-end)
-
-local SectionNames = Tab:AddSection({
-    Name = "Adicionar Nomes no Jogador"
-})
-
-local names = {
-    {"Anonymus", " Anonymus "},
-    {"PRO", " PRO "},
-    {"ERR0R_666", " ERR0R_666 "},
-    {"DARKNE1SSS", " DARKNE1SSS "},
-    {"GHOST", " GHOST "},
-    {"JOKER", " JOKER "},
-    {"ADMIN", " ADMIN "},
-    {"TUBERS93", " TUBERS 93 "},
-    {"CO0LKID", " CO0 LKID "},
-    {"GAME ATTACKED BY MAFIA", " GAME ATTACKED BY MAFIA "},
-    {"INC0MUN", " INC0MUN"},
-    {"BAD BOY", " BAD BOY "}
-}
-
-for _, name in ipairs(names) do
-    Tab:AddButton({
-        Name = "Name: " .. name[1],
-        Callback = function()
-            game:GetService("ReplicatedStorage").RE["1RPNam1eTex1t"]:FireServer("RolePlayName", name[2])
-        end
-    })
-end
-
-local CarTab = Window:MakeTab({"Carro", "car"})
-
--- Colors for RGB
-local colors = {
-    Color3.new(1, 0, 0),     -- Red
-    Color3.new(0, 1, 0),     -- Green
-    Color3.new(0, 0, 1),     -- Blue
-    Color3.new(1, 1, 0),     -- Yellow
-    Color3.new(1, 0, 1),     -- Magenta
-    Color3.new(0, 1, 1),     -- Cyan
-    Color3.new(0.5, 0, 0.5), -- Purple
-    Color3.new(1, 0.5, 0)    -- Orange
-}
-
--- Replicated Storage Service
-local replicatedStorage = game:GetService("ReplicatedStorage")
-local remoteEvent = replicatedStorage:WaitForChild("RE"):WaitForChild("1Player1sCa1r")
-
--- RGB Color Change Logic
-local isColorChanging = false
-local colorChangeCoroutine = nil
-
-local function changeCarColor()
-    while isColorChanging do
-        for _, color in ipairs(colors) do
-            if not isColorChanging then return end
-            local args = {
-                [1] = "PickingCarColor",
-                [2] = color
-            }
-            remoteEvent:FireServer(unpack(args))
-            wait(1)
-        end
-    end
-end
-
-CarTab:AddButton({
-    Name = "Remove All Cars",
-    Callback = function()
-        local ofnawufn = false
-
-if ofnawufn == true then
-    return
-end
-ofnawufn = true
-
-local cawwfer = "MilitaryBoatFree" -- Alterado para MilitaryBoatFree
-local oldcfffff = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(1754, -2, 58) -- Coordenadas atualizadas
-wait(0.3)
-
-local args = {
-    [1] = "PickingBoat", -- Alterado para PickingBoat
-    [2] = cawwfer
-}
-
-game:GetService("ReplicatedStorage").RE:FindFirstChild("1Ca1r"):FireServer(unpack(args))
-wait(1)
-
-local wrinfjn
-for _, errb in pairs(game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"]:GetDescendants()) do
-    if errb:IsA("VehicleSeat") then
-        wrinfjn = errb
-    end
-end
-
-repeat
-    if game.Players.LocalPlayer.Character.Humanoid.Health == 0 then return end
-    if game.Players.LocalPlayer.Character.Humanoid.Sit == true then
-        if not game.Players.LocalPlayer.Character.Humanoid.SeatPart == wrinfjn then
-            game.Players.LocalPlayer.Character.Humanoid.Sit = false
-        end
-    end
-    game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = wrinfjn.CFrame
-    task.wait()
-    game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = wrinfjn.CFrame + Vector3.new(0,1,0)
-    task.wait()
-    game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = wrinfjn.CFrame + Vector3.new(0,-1,0)
-    task.wait()
-until game.Players.LocalPlayer.Character.Humanoid.SeatPart == wrinfjn
-
-for _, wifn in pairs(game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"]:GetDescendants()) do
-    if wifn.Name == "PhysicalWheel" then
-        wifn:Destroy()
-    end
-end
-
-local FLINGED = Instance.new("BodyThrust", game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"].Chassis.Mass) 
-FLINGED.Force = Vector3.new(50000, 0, 50000) 
-FLINGED.Name = "SUNTERIUM HUB FLING"
-FLINGED.Location = game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"].Chassis.Mass.Position
-
-for _, wvwvwasc in pairs(game.workspace.Vehicles:GetChildren()) do
-    for _, ascegr in pairs(wvwvwasc:GetDescendants()) do
-        if ascegr.Name == "VehicleSeat" then
-            local targetcar = ascegr
-            local tet = Instance.new("BodyVelocity", game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"].Chassis.Mass)
-            tet.MaxForce = Vector3.new(math.huge,math.huge,math.huge)
-            tet.P = 1250
-            tet.Velocity = Vector3.new(0,0,0)
-            tet.Name = "#mOVOOEPF$#@F$#GERE..>V<<<<EW<V<<W"
-            for m=1,25 do
-                local pos = {x=0, y=0, z=0}
-                pos.x = targetcar.Position.X
-                pos.y = targetcar.Position.Y
-                pos.z = targetcar.Position.Z
-                pos.x = pos.x + targetcar.Velocity.X / 2
-                pos.y = pos.y + targetcar.Velocity.Y / 2
-                pos.z = pos.z + targetcar.Velocity.Z / 2
-                if pos.y <= -200 then
-                    game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"].Chassis.Mass.CFrame = CFrame.new(0,1000,0)
-                else
-                    game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"].Chassis.Mass.CFrame = CFrame.new(Vector3.new(pos.x,pos.y,pos.z))
-                    task.wait()
-                    game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"].Chassis.Mass.CFrame = CFrame.new(Vector3.new(pos.x,pos.y,pos.z)) + Vector3.new(0,-2,0)
-                    task.wait()
-                    game.workspace.Vehicles[game.Players.LocalPlayer.Name.."Car"].Chassis.Mass.CFrame = CFrame.new(Vector3.new(pos.x,pos.y,pos.z)) * CFrame.new(0,0,2)
-                    task.wait()
-                    game.workspace.Vehicles[
-game.Players.LocalPlayer.Name.."Car"].Chassis.Mass.CFrame = CFrame.new(Vector3.new(pos.x,pos.y,pos.z)) * CFrame.new(2,0,0)
-                    task.wait()
+    Callback = function(state)
+        nameBioRGBActive = state
+        if state then
+            task.spawn(function()
+                while nameBioRGBActive and LocalPlayer.Character do
+                    local color = getRainbowColor(rgbSpeed)
+                    fireServer("1RPNam1eColo1r", { "PickingRPNameColor", color })
+                    fireServer("1RPNam1eColo1r", { "PickingRPBioColor", color })
+                    task.wait(0.03)
                 end
-                task.wait()
+            end)
+        end
+    end
+})
+
+
+local Tab5 = Window:MakeTab({"Car", "car"})
+local Section = Tab5:AddSection({"all car functions"})
+
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Namespace para evitar conflitos
+local TeleportCarro = {}
+TeleportCarro.Players = Players
+TeleportCarro.Workspace = Workspace
+TeleportCarro.LocalPlayer = LocalPlayer
+TeleportCarro.Camera = Camera
+
+-- Função para exibir notificação
+function TeleportCarro:MostrarNotificacao(mensagem)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Aviso",
+            Text = mensagem,
+            Duration = 5
+        })
+    end)
+end
+
+-- Função para desativar/ativar dano de queda
+function TeleportCarro:ToggleFallDamage(disable)
+    if not self.LocalPlayer.Character or not self.LocalPlayer.Character:FindFirstChild("Humanoid") then return false end
+    local humanoid = self.LocalPlayer.Character.Humanoid
+    if disable then
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+        humanoid.PlatformStand = false
+        return true
+    else
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+        return false
+    end
+end
+
+-- Função para teleportar o jogador para o assento do carro
+function TeleportCarro:TeleportToSeat(seat, car)
+    if not self.LocalPlayer.Character or not self.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        self:MostrarNotificacao("Personagem não encontrado!")
+        return false
+    end
+    local humanoid = self.LocalPlayer.Character.Humanoid
+    local rootPart = self.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then
+        self:MostrarNotificacao("Parte raiz do personagem não encontrada!")
+        return false
+    end
+
+    humanoid.Sit = false
+    task.wait(0.1)
+
+    rootPart.CFrame = seat.CFrame + Vector3.new(0, 5, 0)
+    task.wait(0.1)
+
+    seat:Sit(humanoid)
+    task.wait(0.5)
+    return humanoid.SeatPart == seat
+end
+
+-- Função para teleportar o carro para o void com delay
+function TeleportCarro:TeleportToVoid(car)
+    if not car then
+        self:MostrarNotificacao("Veículo inválido!")
+        return
+    end
+    if not car.PrimaryPart then
+        local body = car:FindFirstChild("Body", true) or car:FindFirstChild("Chassis", true)
+        if body and body:IsA("BasePart") then
+            car.PrimaryPart = body
+        else
+            self:MostrarNotificacao("Parte principal do veículo não encontrada!")
+            return
+        end
+    end
+    local voidPosition = Vector3.new(0, -1000, 0)
+    car:SetPrimaryPartCFrame(CFrame.new(voidPosition))
+    task.wait(0.5)
+end
+
+-- Função para teleportar o carro para a posição do jogador com delay
+function TeleportCarro:TeleportToPlayer(car, playerPos)
+    if not car then
+        self:MostrarNotificacao("Veículo inválido!")
+        return
+    end
+    if not car.PrimaryPart then
+        local body = car:FindFirstChild("Body", true) or car:FindFirstChild("Chassis", true)
+        if body and body:IsA("BasePart") then
+            car.PrimaryPart = body
+        else
+            self:MostrarNotificacao("Parte principal do veículo não encontrada!")
+            return
+        end
+    end
+    local targetPos = playerPos + Vector3.new(5, 0, 5)
+    car:SetPrimaryPartCFrame(CFrame.new(targetPos))
+    task.wait(0.5)
+end
+
+-- Função para sair do carro e voltar à posição original
+function TeleportCarro:ExitCarAndReturn(originalPos)
+    if not self.LocalPlayer.Character or not self.LocalPlayer.Character:FindFirstChild("Humanoid") then return end
+    local humanoid = self.LocalPlayer.Character.Humanoid
+    if humanoid.SeatPart then
+        humanoid.Sit = false
+    end
+    task.wait(0.1)
+    if originalPos then
+        self.LocalPlayer.Character:PivotTo(CFrame.new(originalPos))
+    end
+end
+
+-- Função para atualizar a lista de carros no dropdown
+function TeleportCarro:AtualizarListaCarros()
+    local pastaVeiculos = self.Workspace:FindFirstChild("Vehicles")
+    local listaCarros = {}
+    
+    if pastaVeiculos then
+        for _, carro in ipairs(pastaVeiculos:GetChildren()) do
+            if carro.Name:match("Car$") then
+                table.insert(listaCarros, carro.Name)
             end
         end
     end
+    
+    return listaCarros
 end
 
-task.wait()
-local args = {
-    [1] = "DeleteAllVehicles"
-}
-
-game:GetService("ReplicatedStorage").RE:FindFirstChild("1Ca1r"):FireServer(unpack(args))
-game.Players.LocalPlayer.Character.Humanoid.Sit = false
-wait()
-local tet = Instance.new("BodyVelocity", game.Players.LocalPlayer.Character.HumanoidRootPart)
-tet.MaxForce = Vector3.new(math.huge,math.huge,math.huge)
-tet.P = 1250
-tet.Velocity = Vector3.new(0,0,0)
-tet.Name = "#mOVOOEPF$#@F$#GERE..>V<<<<EW<V<<W"
-wait(0.1)
-for m=1,2 do 
-    task.wait()
-    game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = oldcfffff
-end
-wait(1)
-game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = oldcfffff
-wait()
-game.Players.LocalPlayer.Character.HumanoidRootPart:FindFirstChild("#mOVOOEPF$#@F$#GERE..>V<<<<EW<V<<W"):Destroy()
-wait(0.2)
-ofnawufn = false
-    end
+-- Parágrafo
+Tab5:AddParagraph({
+    Title = "use o void protection",
+    Content = ""
 })
 
-CarTab:AddParagraph({"Informação:", "Recomendo usar 2 vezes para garantir que todos os veículos sejam removidos"})
-
-CarTab:AddButton({
-    Name = "Bring All Cars",
-    Callback = function()
-        for _, v in next, workspace.Vehicles:GetChildren() do
-            v:SetPrimaryPartCFrame(game.Players.LocalPlayer.Character:GetPrimaryPartCFrame())
-        end
-    end
-})
-
-CarTab:AddParagraph({"Informação:", "Puxa todos os carros do servidor até você"})
-
--- Speed V1 Section
-local SpeedSection = CarTab:AddSection({"Speed V1"})
-
-local Speed = 50
-local Turbo = 50
-
-local function ChangeCarSpeedAndTurbo(speedValue, turboValue)
-    local player = game.Players.LocalPlayer
-    local car = workspace.Vehicles:FindFirstChild(player.Name .. "Car")
-
-    if car then
-        local body = car:FindFirstChild("Body").VehicleSeat
-        if body then
-            body.TopSpeed.Value = speedValue
-            body.Turbo.Value = turboValue
-            wait(0.1)
-            redzlib:MakeNotification({
-                Name = "Mafia Hub",
-                Content = "Done, You can Move Now!",
-                Time = 5
-            })
-        else
-            redzlib:MakeNotification({
-                Name = "Error",
-                Content = "Sit in car first!",
-                Time = 5
-            })
-        end
-    else
-        redzlib:MakeNotification({
-            Name = "Error",
-            Content = "Put a Car First!",
-            Time = 5
-        })
-    end
-end
-
-CarTab:AddTextBox({
-    Name = "Speed",
-    PlaceholderText = "50",
-    Callback = function(value)
-        local newSpeed = tonumber(value)
-        if newSpeed then
-            Speed = newSpeed
-        end
-    end
-})
-
-CarTab:AddTextBox({
-    Name = "Turbo",
-    PlaceholderText = "50",
-    Callback = function(value)
-        local newTurbo = tonumber(value)
-        if newTurbo then
-            Turbo = newTurbo
-        end
-    end
-})
-
-CarTab:AddTextBox({
-    Name = "Drift",
-    PlaceholderText = "50",
-    Callback = function(value)
-        local args = {
-            [1] = "DriftingNumber",
-            [2] = value
-        }
-        game:GetService("ReplicatedStorage").RE:FindFirstChild("1Player1sCa1r"):FireServer(unpack(args))
-    end
-})
-
-CarTab:AddButton({
-    Name = "Aplicar Velocidade, Turbo e drift",
-    Callback = function()
-        ChangeCarSpeedAndTurbo(Speed, Turbo)
-    end
-})
-
--- Turbo V2 Section
-local TurboSection = CarTab:AddSection({"Turbo V2"})
-
-CarTab:AddButton({
-    Name = "Turbo V2 [Melhor]",
-    Callback = function()
-     local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-
-local voando = false
-local velocidade = 30
-
-local telaGui = Instance.new("ScreenGui", player.PlayerGui)
-
-local function criarBotaoImagem(nome, posicao, idImagem, rotacao, acao)
-    local botao = Instance.new("ImageButton", telaGui)
-    botao.Size = UDim2.new(0, 60, 0, 60)
-    botao.Position = posicao
-    botao.BackgroundTransparency = 1
-    botao.Image = "rbxassetid://" .. idImagem
-    botao.Rotation = rotacao
-    botao.MouseButton1Down:Connect(acao)
-    return botao
-end
-
-local botaoFrente = criarBotaoImagem("BotaoFrente", UDim2.new(0, 10, 0.35, 0), "18478249606", 0, function()
-    voando = true
-    while voando do
-        if humanoidRootPart then
-            humanoidRootPart.Velocity = humanoidRootPart.CFrame.LookVector * velocidade
-        end
-        task.wait()
-    end
-end)
-
-local botaoTras = criarBotaoImagem("BotaoTras", UDim2.new(0, 10, 0.5, 0), "18478249606", 180, function()
-    voando = true
-    while voando do
-        if humanoidRootPart then
-            humanoidRootPart.Velocity = -humanoidRootPart.CFrame.LookVector * velocidade
-        end
-        task.wait()
-    end
-end)
-
-local botaoEsquerda = criarBotaoImagem("BotaoEsquerda", UDim2.new(1, -210, 0.3, 0), "18478249606", -90, function()
-    voando = true
-    while voando do
-        if humanoidRootPart then
-            humanoidRootPart.Velocity = -humanoidRootPart.CFrame.RightVector * velocidade
-        end
-        task.wait()
-    end
-end)
-
-local botaoDireita = criarBotaoImagem("BotaoDireita", UDim2.new(1, -140, 0.3, 0), "18478249606", 90, function()
-    voando = true
-    while voando do
-        if humanoidRootPart then
-            humanoidRootPart.Velocity = humanoidRootPart.CFrame.RightVector * velocidade
-        end
-        task.wait()
-    end
-end)
-
-local function pararVoo()
-    voando = false
-    if humanoidRootPart then
-        humanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-    end
-end
-
-botaoFrente.MouseButton1Up:Connect(pararVoo)
-botaoTras.MouseButton1Up:Connect(pararVoo)
-botaoEsquerda.MouseButton1Up:Connect(pararVoo)
-botaoDireita.MouseButton1Up:Connect(pararVoo)
-
-local botaoTurbo = Instance.new("ImageButton", telaGui)
-botaoTurbo.Size = UDim2.new(0, 60, 0, 60)
-botaoTurbo.Position = UDim2.new(1, -130, 0, 10)
-botaoTurbo.BackgroundTransparency = 1
-botaoTurbo.Image = "rbxassetid://97607579386418"
-botaoTurbo.MouseButton1Down:Connect(function()
-    velocidade = 300
-end)
-
--- Botão de minimizar (com "+" ou "-" dependendo do estado)
-local botaoMinimizar = Instance.new("TextButton", telaGui)
-botaoMinimizar.Size = UDim2.new(0, 60, 0, 60)
-botaoMinimizar.Position = UDim2.new(0, 10, 0, 10)  -- Alterado para o canto superior esquerdo
-botaoMinimizar.BackgroundTransparency = 1
-botaoMinimizar.Text = "-"  -- Inicia com o símbolo de "-"
-botaoMinimizar.TextSize = 40
-botaoMinimizar.TextColor3 = Color3.fromRGB(255, 255, 255)
-
-local botoes = {botaoFrente, botaoTras, botaoEsquerda, botaoDireita, botaoTurbo}
-
-local minimizado = false
-
-local function alternarBotoes()
-    minimizado = not minimizado
-    for _, botao in ipairs(botoes) do
-        botao.Visible = not minimizado
-    end
-    -- Alterar o texto do botão de minimizar
-    if minimizado then
-        botaoMinimizar.Text = "+"
-    else
-        botaoMinimizar.Text = "-"
-    end
-end
-
-botaoMinimizar.MouseButton1Down:Connect(alternarBotoes)    
-    end
-})
-
-CarTab:AddParagraph({"Informação:", "Ambos os turbos não precisam de Gamepass"})
-
--- Music Section
-local MusicSection = CarTab:AddSection({"Music for Cars, Houses"})
-
-local musicIds = {
-    "71373562243752", "138129019858244", "138480372357526", "122199933878670",
-    "74187181906707", "82793916573031", "107421761958790", "91394092603440",
-    "113198957973421", "81452315991527", "93786060174790", "74752089069476",
-    "131592235762789", "132081774507495", "124394293950763", "83381647646350",
-    "16190782181", "1841682637", "3148329638", "124928367733395",
-    "106317184644394", "100247055114504", "107035638005233", "109351649716900",
-    "84751398517083", "125259969174449", "89269071829332", "88094479399489",
-    "72440232513341", "92893359226454", "111281710445018", "98677515506006",
-    "105882833374061", "104541292443133", "105832154444494", "84733736048142",
-    "94718473830640", "130324826943718", "123039027577735", "113312785512702",
-    "139161205970637", "113768944849093", "135667903253566", "81335392002580",
-    "77428091165211", "14145624031", "8080255618", "8654835474",
-    "13530439502", "18841894272", "90323407842935", "136932193331774",
-    "113504863495384", "1836175030", "79998949362539", "109188610023287",
-    "134939857094956", "132245626038510", "124567809277408", "72591334498716",
-    "76578817848504", "17422156627", "81902909302285", "130449561461006",
-    "110519234838026", "106434295960535", "86271123924168", "85481949732828",
-    "106476166672589", "87968531262747", "73966367524216", "137962454483542",
-    "98371771055411", "111668097052966", "140095882383991", "122873874738223",
-    "105461615542794"
-}
-
-local function playCarMusic(musicId)
-    if musicId and musicId ~= "" then
-        local carArgs = {
-            [1] = "PickingCarMusicText",
-            [2] = musicId
-        }
-        game:GetService("ReplicatedStorage").RE:FindFirstChild("1Player1sCa1r"):FireServer(unpack(carArgs))
-    end
-end
-
-local function playScooterMusic(musicId)
-    if musicId and musicId ~= "" then
-        local scooterArgs = {
-            [1] = "PickingScooterMusicText",
-            [2] = musicId
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s"):FireServer(unpack(scooterArgs))
-    end
-end
-
-local function playHouseMusic(musicId)
-    if musicId and musicId ~= "" then
-        local houseArgs = {
-            [1] = "PickHouseMusicText",
-            [2] = musicId
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("1Player1sHous1e"):FireServer(unpack(houseArgs))
-    end
-end
-
-CarTab:AddTextBox({
-    Name = "Music ID (Gamepass Required)",
-    PlaceholderText = "Enter Music ID",
-    Callback = function(value)
-        playCarMusic(value)
-        playScooterMusic(value)
-        playHouseMusic(value)
-    end
-})
-
-CarTab:AddDropdown({
-    Name = "Select Music (Gamepass Required)",
-    Options = musicIds,
-    Callback = function(value)
-        playCarMusic(value)
-        playScooterMusic(value)
-        playHouseMusic(value)
-    end
-})
-
-CarTab:AddParagraph({"Note", "O script de música funciona em todos os carros e casas"})
-
--- Car RGB Section
-local RGBSection = CarTab:AddSection({"Car RGB"})
-
-CarTab:AddToggle({
-    Name = "Car RGB",
+-- Toggle para matar todos os carros
+Tab5:AddToggle({
+    Name = "Matar todos os carros do server",
+    Description = "Teleporta os carros para o void",
     Default = false,
     Callback = function(state)
-        isColorChanging = state
-        if isColorChanging then
-            colorChangeCoroutine = coroutine.create(changeCarColor)
-            coroutine.resume(colorChangeCoroutine)
+        local originalPosition
+        local teleportActive = state
+        local fallDamageDisabled = false
+
+        if state then
+            if self.LocalPlayer.Character and self.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                originalPosition = self.LocalPlayer.Character.HumanoidRootPart.Position
+            else
+                TeleportCarro:MostrarNotificacao("Personagem não encontrado!")
+                return
+            end
+
+            fallDamageDisabled = TeleportCarro:ToggleFallDamage(true)
+
+            spawn(function()
+                local vehiclesFolder = TeleportCarro.Workspace:FindFirstChild("Vehicles")
+                if not vehiclesFolder then
+                    TeleportCarro:MostrarNotificacao("Pasta de veículos não encontrada!")
+                    return
+                end
+
+                local cars = {}
+                for _, car in ipairs(vehiclesFolder:GetChildren()) do
+                    if car.Name:match("Car$") then
+                        table.insert(cars, car)
+                    end
+                end
+
+                for _, car in ipairs(cars) do
+                    if not teleportActive then break end
+
+                    local vehicleSeat = car:FindFirstChildWhichIsA("VehicleSeat", true)
+                    if vehicleSeat and vehicleSeat.Occupant == nil then
+                        local success = TeleportCarro:TeleportToSeat(vehicleSeat, car)
+                        if success then
+                            TeleportCarro:TeleportToVoid(car)
+                            TeleportCarro:ExitCarAndReturn(originalPosition)
+                            task.wait(1)
+                        end
+                    end
+                end
+
+                if teleportActive then
+                    teleportActive = false
+                    TeleportCarro:ToggleFallDamage(false)
+                end
+            end)
+        else
+            teleportActive = false
+            TeleportCarro:ToggleFallDamage(false)
         end
     end
 })
 
-CarTab:AddParagraph({"Note", "Ativando isso deixará seu carro RGB"})
+local Section = Tab5:AddSection({"functions dos carro"})
 
--- Spam Horn Section
-local HornSection = CarTab:AddSection({"Spam Horn"})
-
-local spamming = false
-local args = {"Horn"}
-
-local function spamHorn()
-    while spamming do
-        remoteEvent:FireServer(unpack(args))
-        wait(0.1)
+-- Criar o dropdown
+local Dropdown = Tab5:AddDropdown({
+    Name = "Selecionar Carro do Jogador",
+    Description = "Selecione o carro de um jogador",
+    Default = nil,
+    Options = TeleportCarro:AtualizarListaCarros(),
+    Callback = function(carroSelecionado)
+        _G.SelectedVehicle = carroSelecionado
     end
-end
+})
 
-CarTab:AddToggle({
-    Name = "Spam Horn",
+-- Toggle para ver a câmera do carro selecionado
+Tab5:AddToggle({
+    Name = "Ver Câmera do Carro Selecionado",
+    Description = "Foca a câmera no carro selecionado",
     Default = false,
-    Callback = function(value)
-        spamming = value
-        if spamming then
-            spawn(spamHorn)
+    Callback = function(state)
+        if state then
+            if not _G.SelectedVehicle or _G.SelectedVehicle == "" then
+                TeleportCarro:MostrarNotificacao("Nenhum carro selecionado!")
+                return
+            end
+
+            local vehiclesFolder = TeleportCarro.Workspace:FindFirstChild("Vehicles")
+            if not vehiclesFolder then
+                TeleportCarro:MostrarNotificacao("Pasta de veículos não encontrada!")
+                return
+            end
+
+            local vehicle = vehiclesFolder:FindFirstChild(_G.SelectedVehicle)
+            if not vehicle then
+                TeleportCarro:MostrarNotificacao("Carro selecionado não encontrado!")
+                return
+            end
+
+            local vehicleSeat = vehicle:FindFirstChildWhichIsA("VehicleSeat", true)
+            if not vehicleSeat then
+                TeleportCarro:MostrarNotificacao("Assento do carro não encontrado!")
+                return
+            end
+
+            -- Salvar o estado original da câmera
+            TeleportCarro.OriginalCameraSubject = TeleportCarro.Camera.CameraSubject
+            TeleportCarro.OriginalCameraType = TeleportCarro.Camera.CameraType
+
+            -- Ajustar a câmera para o assento do carro, mesmo se ocupado
+            TeleportCarro.Camera.CameraSubject = vehicleSeat
+            TeleportCarro.Camera.CameraType = Enum.CameraType.Follow
+            TeleportCarro:MostrarNotificacao("Câmera ajustada para o carro " .. _G.SelectedVehicle .. "!")
+        else
+            -- Restaurar a câmera ao estado original
+            if TeleportCarro.OriginalCameraSubject then
+                TeleportCarro.Camera.CameraSubject = TeleportCarro.OriginalCameraSubject
+                TeleportCarro.Camera.CameraType = TeleportCarro.OriginalCameraType or Enum.CameraType.Custom
+                TeleportCarro:MostrarNotificacao("Câmera restaurada ao normal!")
+                TeleportCarro.OriginalCameraSubject = nil
+                TeleportCarro.OriginalCameraType = nil
+            end
         end
     end
 })
 
--- Fly Car Section
-local FlySection = CarTab:AddSection({"Fly Car"})
+-- Atualizar o dropdown dinamicamente
+TeleportCarro.Workspace:WaitForChild("Vehicles").ChildAdded:Connect(function()
+    Dropdown:Set(TeleportCarro:AtualizarListaCarros())
+end)
+TeleportCarro.Workspace:WaitForChild("Vehicles").ChildRemoved:Connect(function()
+    Dropdown:Set(TeleportCarro:AtualizarListaCarros())
+end)
 
-CarTab:AddButton({
-    Name = "Fly Car",
+local Section = Tab5:AddSection({"functions kill e trazer"})
+
+-- Botão para destruir carro selecionado
+Tab5:AddButton({
+    Name = "Destruir Carro Selecionado",
+    Description = "Teleporta o carro selecionado para o void",
     Callback = function()
-        --by Luscaa
--- Version: 4.1
+        if not _G.SelectedVehicle or _G.SelectedVehicle == "" then
+            TeleportCarro:MostrarNotificacao("Nenhum carro selecionado!")
+            return
+        end
 
--- Instances:
-local Flymguiv2 = Instance.new("ScreenGui")
-local Drag = Instance.new("Frame")
-local FlyFrame = Instance.new("Frame")
-local ddnsfbfwewefe = Instance.new("TextButton")
-local Speed = Instance.new("TextBox")
-local Fly = Instance.new("TextButton")
-local Speeed = Instance.new("TextLabel")
-local Stat = Instance.new("TextLabel")
-local Stat2 = Instance.new("TextLabel")
-local Unfly = Instance.new("TextButton")
-local Vfly = Instance.new("TextLabel")
-local Close = Instance.new("TextButton")
-local Minimize = Instance.new("TextButton")
-local Flyon = Instance.new("Frame")
-local W = Instance.new("TextButton")
-local S = Instance.new("TextButton")
+        local vehiclesFolder = TeleportCarro.Workspace:FindFirstChild("Vehicles")
+        if not vehiclesFolder then
+            TeleportCarro:MostrarNotificacao("Pasta de veículos não encontrada!")
+            return
+        end
 
---Properties:
+        local vehicle = vehiclesFolder:FindFirstChild(_G.SelectedVehicle)
+        if not vehicle then
+            TeleportCarro:MostrarNotificacao("Carro selecionado não encontrado!")
+            return
+        end
 
-Flymguiv2.Name = "Car Fly gui v2"
-Flymguiv2.Parent = game.CoreGui
-Flymguiv2.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        local vehicleSeat = vehicle:FindFirstChildWhichIsA("VehicleSeat", true)
+        if not vehicleSeat then
+            TeleportCarro:MostrarNotificacao("Assento do carro não encontrado!")
+            return
+        end
 
-Drag.Name = "Drag"
-Drag.Parent = Flymguiv2
-Drag.Active = true
-Drag.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-Drag.BorderSizePixel = 0
-Drag.Draggable = true
-Drag.Position = UDim2.new(0.482438415, 0, 0.454874992, 0)
-Drag.Size = UDim2.new(0, 237, 0, 27)
+        if vehicleSeat.Occupant then
+            TeleportCarro:MostrarNotificacao("O kill car não foi possível, há alguém sentado no assento do motorista!")
+            return
+        end
 
-FlyFrame.Name = "FlyFrame"
-FlyFrame.Parent = Drag
-FlyFrame.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-FlyFrame.BorderSizePixel = 0
-FlyFrame.Draggable = true
-FlyFrame.Position = UDim2.new(-0.00200000009, 0, 0.989000022, 0)
-FlyFrame.Size = UDim2.new(0, 237, 0, 139)
+        local originalPos
+        if TeleportCarro.LocalPlayer.Character and TeleportCarro.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            originalPos = TeleportCarro.LocalPlayer.Character.HumanoidRootPart.Position
+        else
+            TeleportCarro:MostrarNotificacao("Personagem do jogador não encontrado!")
+            return
+        end
 
-ddnsfbfwewefe.Name = "ddnsfbfwewefe"
-ddnsfbfwewefe.Parent = FlyFrame
-ddnsfbfwewefe.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-ddnsfbfwewefe.BorderSizePixel = 0
-ddnsfbfwewefe.Position = UDim2.new(-0.000210968778, 0, -0.00395679474, 0)
-ddnsfbfwewefe.Size = UDim2.new(0, 237, 0, 27)
-ddnsfbfwewefe.Font = Enum.Font.SourceSans
-ddnsfbfwewefe.Text = "by Lusquinha_067"
-ddnsfbfwewefe.TextColor3 = Color3.fromRGB(255, 255, 255)
-ddnsfbfwewefe.TextScaled = true
-ddnsfbfwewefe.TextSize = 14.000
-ddnsfbfwewefe.TextWrapped = true
-
-Speed.Name = "Speed"
-Speed.Parent = FlyFrame
-Speed.BackgroundColor3 = Color3.fromRGB(63, 63, 63)
-Speed.BorderColor3 = Color3.fromRGB(0, 0, 191)
-Speed.BorderSizePixel = 0
-Speed.Position = UDim2.new(0.445025861, 0, 0.402877688, 0)
-Speed.Size = UDim2.new(0, 111, 0, 33)
-Speed.Font = Enum.Font.SourceSans
-Speed.PlaceholderColor3 = Color3.fromRGB(255, 255, 255)
-Speed.Text = "50"
-Speed.TextColor3 = Color3.fromRGB(255, 255, 255)
-Speed.TextScaled = true
-Speed.TextSize = 14.000
-Speed.TextWrapped = true
-
-Fly.Name = "Fly"
-Fly.Parent = FlyFrame
-Fly.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-Fly.BorderSizePixel = 0
-Fly.Position = UDim2.new(0.0759493634, 0, 0.705797076, 0)
-Fly.Size = UDim2.new(0, 199, 0, 32)
-Fly.Font = Enum.Font.SourceSans
-Fly.Text = "Enable"
-Fly.TextColor3 = Color3.fromRGB(255, 255, 255)
-Fly.TextScaled = true
-Fly.TextSize = 14.000
-Fly.TextWrapped = true
-Fly.MouseButton1Click:Connect(function()
-	local HumanoidRP = game.Players.LocalPlayer.Character.HumanoidRootPart
-	Fly.Visible = false
-	Stat2.Text = "On"
-	Stat2.TextColor3 = Color3.fromRGB(0, 255, 0)
-	Unfly.Visible = true
-	Flyon.Visible = true
-	local BV = Instance.new("BodyVelocity",HumanoidRP)
-	local BG = Instance.new("BodyGyro",HumanoidRP)
-	BV.MaxForce = Vector3.new(math.huge,math.huge,math.huge)
-	game:GetService('RunService').RenderStepped:connect(function()
-	BG.MaxTorque = Vector3.new(math.huge,math.huge,math.huge)
-	BG.D = 5000
-	BG.P = 100000
-	BG.CFrame = game.Workspace.CurrentCamera.CFrame
-	end)
-end)
-
-Speeed.Name = "Speeed"
-Speeed.Parent = FlyFrame
-Speeed.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-Speeed.BorderSizePixel = 0
-Speeed.Position = UDim2.new(0.0759493634, 0, 0.402877688, 0)
-Speeed.Size = UDim2.new(0, 87, 0, 32)
-Speeed.ZIndex = 0
-Speeed.Font = Enum.Font.SourceSans
-Speeed.Text = "Speed:"
-Speeed.TextColor3 = Color3.fromRGB(255, 255, 255)
-Speeed.TextScaled = true
-Speeed.TextSize = 14.000
-Speeed.TextWrapped = true
-
-Stat.Name = "Stat"
-Stat.Parent = FlyFrame
-Stat.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-Stat.BorderSizePixel = 0
-Stat.Position = UDim2.new(0.299983799, 0, 0.239817441, 0)
-Stat.Size = UDim2.new(0, 85, 0, 15)
-Stat.Font = Enum.Font.SourceSans
-Stat.Text = "Status:"
-Stat.TextColor3 = Color3.fromRGB(255, 255, 255)
-Stat.TextScaled = true
-Stat.TextSize = 14.000
-Stat.TextWrapped = true
-
-Stat2.Name = "Stat2"
-Stat2.Parent = FlyFrame
-Stat2.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-Stat2.BorderSizePixel = 0
-Stat2.Position = UDim2.new(0.546535194, 0, 0.239817441, 0)
-Stat2.Size = UDim2.new(0, 27, 0, 15)
-Stat2.Font = Enum.Font.SourceSans
-Stat2.Text = "Off"
-Stat2.TextColor3 = Color3.fromRGB(255, 0, 0)
-Stat2.TextScaled = true
-Stat2.TextSize = 14.000
-Stat2.TextWrapped = true
-
-Unfly.Name = "Unfly"
-Unfly.Parent = FlyFrame
-Unfly.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-Unfly.BorderSizePixel = 0
-Unfly.Position = UDim2.new(0.0759493634, 0, 0.705797076, 0)
-Unfly.Size = UDim2.new(0, 199, 0, 32)
-Unfly.Visible = false
-Unfly.Font = Enum.Font.SourceSans
-Unfly.Text = "Disable"
-Unfly.TextColor3 = Color3.fromRGB(255, 255, 255)
-Unfly.TextScaled = true
-Unfly.TextSize = 14.000
-Unfly.TextWrapped = true
-Unfly.MouseButton1Click:Connect(function()
-	local HumanoidRP = game.Players.LocalPlayer.Character.HumanoidRootPart
-	Fly.Visible = true
-	Stat2.Text = "Off"
-	Stat2.TextColor3 = Color3.fromRGB(255, 0, 0)
-	wait()
-	Unfly.Visible = false
-	Flyon.Visible = false
-	HumanoidRP:FindFirstChildOfClass("BodyVelocity"):Destroy()
-	HumanoidRP:FindFirstChildOfClass("BodyGyro"):Destroy()
-end)
-
-Vfly.Name = "Vfly"
-Vfly.Parent = Drag
-Vfly.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-Vfly.BorderSizePixel = 0
-Vfly.Size = UDim2.new(0, 57, 0, 27)
-Vfly.Font = Enum.Font.SourceSans
-Vfly.Text = "Car fly"
-Vfly.TextColor3 = Color3.fromRGB(255, 255, 255)
-Vfly.TextScaled = true
-Vfly.TextSize = 14.000
-Vfly.TextWrapped = true
-
-Close.Name = "Close"
-Close.Parent = Drag
-Close.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-Close.BorderSizePixel = 0
-Close.Position = UDim2.new(0.875, 0, 0, 0)
-Close.Size = UDim2.new(0, 27, 0, 27)
-Close.Font = Enum.Font.SourceSans
-Close.Text = "X"
-Close.TextColor3 = Color3.fromRGB(255, 255, 255)
-Close.TextScaled = true
-Close.TextSize = 14.000
-Close.TextWrapped = true
-Close.MouseButton1Click:Connect(function()
-	Flymguiv2:Destroy()
-end)
-
-Minimize.Name = "Minimize"
-Minimize.Parent = Drag
-Minimize.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-Minimize.BorderSizePixel = 0
-Minimize.Position = UDim2.new(0.75, 0, 0, 0)
-Minimize.Size = UDim2.new(0, 27, 0, 27)
-Minimize.Font = Enum.Font.SourceSans
-Minimize.Text = "-"
-Minimize.TextColor3 = Color3.fromRGB(255, 255, 255)
-Minimize.TextScaled = true
-Minimize.TextSize = 14.000
-Minimize.TextWrapped = true
-function Mini()
-	if Minimize.Text == "-" then
-		Minimize.Text = "+"
-		FlyFrame.Visible = false
-	elseif Minimize.Text == "+" then
-		Minimize.Text = "-"
-		FlyFrame.Visible = true
-	end
-end
-Minimize.MouseButton1Click:Connect(Mini)
-
-Flyon.Name = "Fly on"
-Flyon.Parent = Flymguiv2
-Flyon.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-Flyon.BorderSizePixel = 0
-Flyon.Position = UDim2.new(0.117647067, 0, 0.550284624, 0)
-Flyon.Size = UDim2.new(0.148000002, 0, 0.314999998, 0)
-Flyon.Visible = false
-Flyon.Active = true
-Flyon.Draggable = true
-
-W.Name = "W"
-W.Parent = Flyon
-W.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-W.BorderSizePixel = 0
-W.Position = UDim2.new(0.134719521, 0, 0.0152013302, 0)
-W.Size = UDim2.new(0.708999991, 0, 0.499000013, 0)
-W.Font = Enum.Font.SourceSans
-W.Text = "^"
-W.TextColor3 = Color3.fromRGB(255, 255, 255)
-W.TextScaled = true
-W.TextSize = 14.000
-W.TextWrapped = true
-W.TouchLongPress:Connect(function()
-	local HumanoidRP = game.Players.LocalPlayer.Character.HumanoidRootPart
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * 0
-end)
-
-W.MouseButton1Click:Connect(function()
-	local HumanoidRP = game.Players.LocalPlayer.Character.HumanoidRootPart
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * 0
-end)
-
-S.Name = "S"
-S.Parent = Flyon
-S.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
-S.BorderSizePixel = 0
-S.Position = UDim2.new(0.134000003, 0, 0.479999989, 0)
-S.Rotation = 180.000
-S.Size = UDim2.new(0.708999991, 0, 0.499000013, 0)
-S.Font = Enum.Font.SourceSans
-S.Text = "^"
-S.TextColor3 = Color3.fromRGB(255, 255, 255)
-S.TextScaled = true
-S.TextSize = 14.000
-S.TextWrapped = true
-S.TouchLongPress:Connect(function()
-	local HumanoidRP = game.Players.LocalPlayer.Character.HumanoidRootPart
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * 0
-end)
-
-S.MouseButton1Click:Connect(function()
-	local HumanoidRP = game.Players.LocalPlayer.Character.HumanoidRootPart
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * -Speed.Text
-	wait(.1)
-	HumanoidRP.BodyVelocity.Velocity = game.Workspace.CurrentCamera.CFrame.LookVector * 0
-end)
+        local isFallDamageOff = TeleportCarro:ToggleFallDamage(true)
+        local success = TeleportCarro:TeleportToSeat(vehicleSeat, vehicle)
+        if success then
+            TeleportCarro:TeleportToVoid(vehicle)
+            TeleportCarro:MostrarNotificacao("Carro " .. _G.SelectedVehicle .. " foi teleportado para o void!")
+            TeleportCarro:ExitCarAndReturn(originalPos)
+        else
+            TeleportCarro:MostrarNotificacao("Falha ao sentar no carro!")
+        end
+        TeleportCarro:ToggleFallDamage(false)
     end
 })
 
-CarTab:AddParagraph({"Note", "Ativando isso você pode voar com o seu carro"})
+-- Botão para trazer carro selecionado
+Tab5:AddButton({
+    Name = "Trazer Carro Selecionado",
+    Description = "Teleporta o carro selecionado para sua posição",
+    Callback = function()
+        if not _G.SelectedVehicle or _G.SelectedVehicle == "" then
+            TeleportCarro:MostrarNotificacao("Nenhum carro selecionado!")
+            return
+        end
 
--- Section
-local maisSection = CarTab:AddSection({"mais em breve"})
+        local vehiclesFolder = TeleportCarro.Workspace:FindFirstChild("Vehicles")
+        if not vehiclesFolder then
+            TeleportCarro:MostrarNotificacao("Pasta de veículos não encontrada!")
+            return
+        end
+
+        local vehicle = vehiclesFolder:FindFirstChild(_G.SelectedVehicle)
+        if not vehicle then
+            TeleportCarro:MostrarNotificacao("Carro selecionado não encontrado!")
+            return
+        end
+
+        local vehicleSeat = vehicle:FindFirstChildWhichIsA("VehicleSeat", true)
+        if not vehicleSeat then
+            TeleportCarro:MostrarNotificacao("Assento do carro não encontrado!")
+            return
+        end
+
+        if vehicleSeat.Occupant then
+            TeleportCarro:MostrarNotificacao("O teleporte do carro não foi possível, há alguém sentado no assento do motorista!")
+            return
+        end
+
+        local originalPos
+        if TeleportCarro.LocalPlayer.Character and TeleportCarro.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            originalPos = TeleportCarro.LocalPlayer.Character.HumanoidRootPart.Position
+        else
+            TeleportCarro:MostrarNotificacao("Personagem do jogador não encontrado!")
+            return
+        end
+
+        local isFallDamageOff = TeleportCarro:ToggleFallDamage(true)
+        local success = TeleportCarro:TeleportToSeat(vehicleSeat, vehicle)
+        if success then
+            TeleportCarro:TeleportToPlayer(vehicle, originalPos)
+            TeleportCarro:MostrarNotificacao("Carro " .. _G.SelectedVehicle .. " foi teleportado para você!")
+            TeleportCarro:ExitCarAndReturn(originalPos)
+        else
+            TeleportCarro:MostrarNotificacao("Falha ao sentar no carro!")
+        end
+        TeleportCarro:ToggleFallDamage(false)
+    end
+})
