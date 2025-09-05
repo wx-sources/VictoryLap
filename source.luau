@@ -3,7 +3,7 @@ workspace.FallenPartsDestroyHeight = -math.huge
 
 local Window = Libary:MakeWindow({
     Title = "🌠 VictoryLap Hub 🌠 - Brookhaven Updated",
-    SubTitle = "by: Vs888 and Wx",
+    SubTitle = "by: Ks888 and Wx",
     LoadText = "Carregando VictoryLap Hub",
     Flags = "VcLpHub_Broookhaven"
 })
